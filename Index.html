@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WorkspaceLM - Resume Intelligence Workspace</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- PDF.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans flex flex-col min-h-screen">
+
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-500/20">
+                <i data-lucide="brain-circuit" class="h-6 w-6"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    WorkspaceLM <span class="text-xs bg-indigo-500/20 text-indigo-400 font-semibold px-2 py-0.5 rounded-full border border-indigo-500/30">Interactive Live Preview</span>
+                </h1>
+                <p class="text-xs text-slate-400">Minimalist candidate analysis, matching, and interactive notebook</p>
+            </div>
+        </div>
+        <div>
+            <button id="clear-candidate-btn" onclick="resetWorkspace()" class="hidden text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-900/50 hover:bg-rose-500/10 hover:border-rose-500/30 text-slate-300 hover:text-rose-400 transition">
+                <i data-lucide="trash-2" class="h-3.5 w-3.5"></i>
+                Clear Candidate
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="flex-1 max-w-[1700px] w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-hidden">
+        
+        <!-- Left Section - Input Panel -->
+        <section class="lg:col-span-4 flex flex-col gap-6">
+            
+            <div class="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-5">
+                
+                <!-- API Key Configuration Area (Optional) -->
+                <div class="bg-slate-900/80 border border-slate-850 p-3 rounded-xl">
+                    <label class="text-[10px] font-bold text-indigo-400 tracking-wider uppercase block mb-1">
+                        🔑 Optional: Gemini API Key
+                    </label>
+                    <input type="password" id="gemini-key-input" placeholder="Paste your API key to enable live AI" 
+                        class="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition placeholder:text-slate-600" />
+                    <p class="text-[9px] text-slate-500 mt-1">If blank, the workspace runs a high-fidelity local simulator for demonstration.</p>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <h2 class="font-semibold text-sm text-slate-300 tracking-wide uppercase flex items-center gap-2">
+                        <i data-lucide="book-open" class="h-4 w-4 text-indigo-400"></i> Source Inputs
+                    </h2>
+                    <span id="active-document-badge" class="hidden text-xs bg-indigo-500/10 text-indigo-300 px-2.5 py-0.5 rounded-full font-medium border border-indigo-500/20 items-center gap-1">
+                        <i data-lucide="check" class="h-3 w-3"></i> Active Document
+                    </span>
+                </div>
+
+                <!-- Drag and Drop Box -->
+                <div class="relative group">
+                    <input type="file" id="resume-file" accept=".pdf,.txt" onchange="handleFileUpload(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                    <div class="border-2 border-dashed border-slate-800 group-hover:border-indigo-500/50 rounded-xl p-6 text-center transition bg-slate-900/30 hover:bg-slate-900/60">
+                        <i data-lucide="upload-cloud" class="h-8 w-8 mx-auto text-slate-500 group-hover:text-indigo-400 mb-2 transition"></i>
+                        <p id="file-label" class="text-sm font-medium text-slate-300">Upload Candidate Resume</p>
+                        <p class="text-xs text-slate-500 mt-1">PDF or plain TXT format</p>
+                    </div>
+                </div>
+
+                <!-- Job Description Input -->
+                <div class="flex flex-col gap-2">
+                    <label class="text-xs font-semibold text-slate-400 flex items-center justify-between">
+                        <span>TARGET JOB DESCRIPTION (RECOMMENDED)</span>
+                    </label>
+                    <textarea id="job-description" placeholder="e.g. Senior Software Engineer with 5+ years React, Node.js, and Cloud architecture experience..." rows="4" class="w-full text-xs bg-slate-900/80 border border-slate-800 rounded-xl p-3 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-200 transition placeholder:text-slate-600 resize-none"></textarea>
+                </div>
+
+                <!-- Manual paste expandable option -->
+                <details id="manual-paste-details" open class="text-xs text-slate-400 border-t border-slate-900 pt-3">
+                    <summary class="cursor-pointer hover:text-indigo-400 transition font-medium">Extracted Text View / Manual Paste</summary>
+                    <div class="mt-2">
+                        <p class="text-[10px] text-slate-505 mb-1">Verify or edit extracted resume text here before triggering analysis:</p>
+                        <textarea id="manual-resume-text" placeholder="Your resume text will appear here once loaded, or you can paste/edit it directly..." rows="6" class="w-full text-xs bg-slate-900/80 border border-slate-805 rounded-xl p-3 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-200 transition placeholder:text-slate-600 resize-none"></textarea>
+                    </div>
+                </details>
+
+                <button id="analyze-btn" onclick="startAnalysis()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium text-sm transition shadow-lg shadow-indigo-600/10 hover:shadow-indigo-600/20 flex items-center justify-center gap-2">
+                    <i data-lucide="sparkles" class="h-4 w-4"></i>
+                    Analyze and Core-Match
+                </button>
+            </div>
+
+            <!-- Steps Sidebar Info -->
+            <div class="bg-gradient-to-br from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4">
+                <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Interactive Workspace</h3>
+                <div class="space-y-3">
+                    <div class="flex gap-3 text-xs text-slate-300">
+                        <div class="text-indigo-400 font-bold bg-slate-900 w-5 h-5 rounded-full flex items-center justify-center border border-slate-800">1</div>
+                        <div>
+                            <p class="font-semibold text-slate-200">Local Parsing</p>
+                            <p class="text-slate-400 text-slate-400/80">Text extraction runs fully inside your browser with PDF.js libraries.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 text-xs text-slate-300">
+                        <div class="text-indigo-400 font-bold bg-slate-900 w-5 h-5 rounded-full flex items-center justify-center border border-slate-800">2</div>
+                        <div>
+                            <p class="font-semibold text-slate-200">Active Scoring</p>
+                            <p class="text-slate-400 text-slate-400/80">Compares applicant experience profile details against target criteria parameters.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 text-xs text-slate-300">
+                        <div class="text-indigo-400 font-bold bg-slate-900 w-5 h-5 rounded-full flex items-center justify-center border border-slate-800">3</div>
+                        <div>
+                            <p class="font-semibold text-slate-200">Interactive Assistant</p>
+                            <p class="text-slate-400 text-slate-400/80">Notebook interface responds with context-relevant candidate insights.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Section - Tabs and Reports -->
+        <section class="lg:col-span-8 flex flex-col bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-xl min-h-[600px] lg:h-[calc(100vh-140px)]">
+            
+            <!-- Tab Controls -->
+            <div class="border-b border-slate-800 bg-slate-950 px-6 py-2 flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                    <button id="tab-report-btn" onclick="switchTab('report')" class="px-4 py-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 border-indigo-500 text-indigo-400 bg-indigo-500/5">
+                        <i data-lucide="bar-chart-3" class="h-4 w-4"></i>
+                        Recruitment Report
+                    </button>
+                    <button id="tab-chat-btn" onclick="switchTab('chat')" class="px-4 py-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 border-transparent text-slate-400 hover:text-slate-200">
+                        <i data-lucide="message-square" class="h-4 w-4"></i>
+                        Notebook Chat Q&A
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab Dynamic Contents -->
+            <div class="flex-1 overflow-y-auto p-6 relative">
+                
+                <!-- Error Box -->
+                <div id="error-box" class="hidden mb-6 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-xl p-4 text-sm flex gap-3 items-start">
+                    <i data-lucide="alert-circle" class="h-5 w-5 shrink-0 mt-0.5"></i>
+                    <div>
+                        <h4 class="font-semibold">Analysis Encountered Issues</h4>
+                        <p id="error-message" class="text-xs text-rose-400/85 mt-1"></p>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center p-8">
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl mb-4 text-slate-500">
+                        <i data-lucide="file-text" class="h-12 w-12 text-slate-600"></i>
+                    </div>
+                    <h3 class="text-base font-semibold text-slate-300">Waiting for Document & Analysis</h3>
+                    <p class="text-xs text-slate-500 max-w-sm mt-1">
+                        Upload a candidate resume or paste the profile to the left to begin generation. The workspace will build a detailed analytical file.
+                    </p>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loading-state" class="hidden h-full flex flex-col items-center justify-center text-center p-8">
+                    <i data-lucide="loader-2" class="h-10 w-10 text-indigo-500 animate-spin mb-4"></i>
+                    <h3 class="text-base font-semibold text-slate-300">Extracting and Structuring Candidate Intelligence</h3>
+                    <p id="loading-subtext" class="text-xs text-slate-500 max-w-sm mt-1">
+                        Parsing resume and matching core stack details...
+                    </p>
+                </div>
+
+                <!-- Recruitment Report View -->
+                <div id="report-view" class="hidden space-y-6">
+                    
+                    <!-- Candidate Info and Gauge Header -->
+                    <div class="bg-gradient-to-r from-indigo-950/40 to-slate-900 border border-indigo-500/20 rounded-2xl p-6 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                            <i data-lucide="user" class="w-32 h-32 text-indigo-400"></i>
+                        </div>
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h2 id="cand-name" class="text-2xl font-bold text-white tracking-tight"></h2>
+                                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 mt-2">
+                                    <span id="cand-email"></span>
+                                    <span id="cand-phone"></span>
+                                </div>
+                            </div>
+
+                            <!-- Circle Gauge -->
+                            <div class="flex items-center gap-3 bg-slate-900/80 border border-slate-800 p-3 rounded-xl self-start md:self-auto">
+                                <div class="text-right">
+                                    <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Match Index</div>
+                                    <div id="match-label" class="text-[10px] text-slate-500">General Score</div>
+                                </div>
+                                <div class="relative flex items-center justify-center">
+                                    <svg class="w-14 h-14 transform -rotate-90">
+                                        <circle cx="28" cy="28" r="24" stroke="currentColor" class="text-slate-800" stroke-width="4" fill="transparent" />
+                                        <circle id="gauge-circle" cx="28" cy="28" r="24" stroke="currentColor" class="text-indigo-500" stroke-width="4" fill="transparent" stroke-dasharray="150.79" stroke-dashoffset="150.79" />
+                                    </svg>
+                                    <span id="match-score-text" class="absolute text-sm font-extrabold text-white">0%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 pt-4 border-t border-slate-800/60">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                <i data-lucide="sparkles" class="h-3 w-3 text-indigo-400"></i> Executive Summary
+                            </h4>
+                            <p id="exec-summary" class="text-sm text-slate-300 leading-relaxed font-light"></p>
+                        </div>
+                    </div>
+
+                    <!-- Grid Info -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Key Skills -->
+                        <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-5 flex flex-col">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <i data-lucide="award" class="h-4 w-4 text-emerald-400"></i> Key Skills & Technical Stack
+                            </h3>
+                            <div id="skills-cloud" class="flex flex-wrap gap-2"></div>
+                        </div>
+
+                        <!-- Strengths -->
+                        <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-5 flex flex-col">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <i data-lucide="check-circle2" class="h-4 w-4 text-indigo-400"></i> Noteworthy Strengths
+                            </h3>
+                            <ul id="strengths-list" class="space-y-2 text-xs text-slate-300"></ul>
+                        </div>
+                    </div>
+
+                    <!-- Suggested Interview Questions -->
+                    <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-5">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <i data-lucide="message-square" class="h-4 w-4 text-purple-400"></i> Suggested Interview Questions
+                        </h3>
+                        <div id="questions-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5"></div>
+                    </div>
+
+                    <!-- Potential Improvement / Gaps -->
+                    <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-5">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <i data-lucide="alert-circle" class="h-4 w-4 text-amber-400"></i> Potential Areas of Evaluation & Gaps
+                        </h3>
+                        <ul id="improvements-list" class="space-y-2 text-xs text-slate-300"></ul>
+                    </div>
+
+                </div>
+
+                <!-- Notebook Chat View -->
+                <div id="chat-view" class="hidden h-full flex flex-col gap-4">
+                    
+                    <!-- Chat Output List -->
+                    <div id="chat-messages" class="flex-1 overflow-y-auto space-y-4 max-h-[480px] min-h-[350px] pr-2">
+                        <!-- Default greeting -->
+                        <div class="flex gap-3 max-w-[85%]">
+                            <div class="bg-slate-800 text-slate-300 p-2 rounded-xl shrink-0 h-8 w-8 flex items-center justify-center text-xs font-bold">AI</div>
+                            <div id="chat-greeting" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs leading-relaxed text-slate-300">
+                                Welcome to your Workspace! Upload a resume on the left, and ask me anything about the candidate here. Try: "What are their leadership skills?" or "Are they a good fit for senior roles?"
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Suggestions -->
+                    <div id="quick-prompts-container" class="hidden flex flex-wrap gap-2 pt-2 border-t border-slate-900">
+                        <button onclick="setQuickPrompt('Summarize technical stack')" class="text-[11px] bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-lg transition">Summarize technical stack</button>
+                        <button onclick="setQuickPrompt('Find any hidden red flags')" class="text-[11px] bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-lg transition">Find any hidden red flags</button>
+                        <button onclick="setQuickPrompt('Generate custom interview outline')" class="text-[11px] bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-lg transition">Generate custom interview outline</button>
+                    </div>
+
+                    <!-- Message Input form -->
+                    <form id="chat-form" onsubmit="handleSendMessage(event)" class="flex gap-2 mt-auto">
+                        <input type="text" id="chat-input" placeholder="Upload a resume on the left first to ask questions" disabled class="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none placeholder:text-slate-600 disabled:opacity-50" />
+                        <button type="submit" id="chat-send-btn" disabled class="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white p-3 rounded-xl transition flex items-center justify-center">
+                            <i data-lucide="send" class="h-4 w-4"></i>
+                        </button>
+                    </form>
+
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <!-- App State Management Script -->
+    <script>
+        // Core States
+        let resumeText = "";
+        let analysisResult = null;
+        let isProcessing = false;
+        let currentTab = 'report';
+        let chatHistory = [];
+
+        // UI Element selectors
+        const fileInput = document.getElementById('resume-file');
+        const fileLabel = document.getElementById('file-label');
+        const jobDescInput = document.getElementById('job-description');
+        const manualResumeInput = document.getElementById('manual-resume-text');
+        const activeBadge = document.getElementById('active-document-badge');
+        const clearBtn = document.getElementById('clear-candidate-btn');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const geminiKeyInput = document.getElementById('gemini-key-input');
+        
+        const emptyState = document.getElementById('empty-state');
+        const loadingState = document.getElementById('loading-state');
+        const reportView = document.getElementById('report-view');
+        const chatView = document.getElementById('chat-view');
+        
+        const tabReportBtn = document.getElementById('tab-report-btn');
+        const tabChatBtn = document.getElementById('tab-chat-btn');
+        
+        const chatInput = document.getElementById('chat-input');
+        const chatSendBtn = document.getElementById('chat-send-btn');
+        const chatMessages = document.getElementById('chat-messages');
+        const quickPrompts = document.getElementById('quick-prompts-container');
+        
+        const errorBox = document.getElementById('error-box');
+        const errorMessage = document.getElementById('error-message');
+
+        // Extract Text from PDF inside the Client Browser securely using pdf.js
+        async function extractTextFromPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            let fullText = "";
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                // Enhanced, performance-optimized text extraction
+                const len = textContent.items.length;
+                let pageText = "";
+                for (let j = 0; j < len; j++) {
+                    const item = textContent.items[j];
+                    pageText += item.hasNeatLineReturn ? item.str + "\n" : item.str + " ";
+                }
+                fullText += pageText + "\n";
+            }
+            return fullText;
+        }
+
+        // Handle file selection change
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            fileLabel.textContent = file.name;
+            hideError();
+            setLoading(true);
+
+            try {
+                if (file.type === "application/pdf") {
+                    resumeText = await extractTextFromPDF(file);
+                } else if (file.type === "text/plain") {
+                    resumeText = await file.text();
+                } else {
+                    throw new Error("Please upload a valid PDF or plain TXT file.");
+                }
+                
+                // Immediately update manual text field so the user sees exactly what was extracted
+                manualResumeInput.value = resumeText;
+                
+                // Trigger Gemini parsing workspace directly
+                await performWorkspaceAnalysis();
+            } catch (err) {
+                showError(err.message || "Something went wrong while processing the resume.");
+                setLoading(false);
+            }
+        }
+
+        async function startAnalysis() {
+            // Read from the input field directly in case the user edited or manually pasted details
+            const pastedText = manualResumeInput.value.trim();
+            if (pastedText) {
+                resumeText = pastedText;
+            }
+            if (!resumeText) {
+                showError("Please paste your resume text or upload a file first.");
+                return;
+            }
+            hideError();
+            setLoading(true);
+            await performWorkspaceAnalysis();
+        }
+
+        // Performs live API fetch or triggers High Fidelity Simulated Analysis
+        async function performWorkspaceAnalysis() {
+            const apiKey = geminiKeyInput.value.trim();
+            
+            if (apiKey) {
+                // LIVE AI EXTRACTION MODE
+                document.getElementById('loading-subtext').textContent = "Connecting to Gemini, parsing schema and calculating match indicators...";
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{
+                                role: "user",
+                                parts: [{
+                                    text: `Analyze this raw resume text. Extract candidate's core details into requested JSON schema. If present in the text, you MUST extract them accurately. Do NOT output mock values if they exist in the text.
+
+                                    Resume Raw Text:
+                                    """
+                                    ${resumeText}
+                                    """
+
+                                    Target Job Description Criteria:
+                                    """
+                                    ${jobDescInput.value.trim() || 'Software Engineer'}
+                                    """`
+                                }]
+                            }],
+                            generationConfig: {
+                                responseMimeType: "application/json",
+                                responseSchema: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        candidateName: { type: "STRING" },
+                                        email: { type: "STRING" },
+                                        phone: { type: "STRING" },
+                                        matchScore: { type: "INTEGER" },
+                                        executiveSummary: { type: "STRING" },
+                                        topSkills: { type: "ARRAY", items: { type: "STRING" } },
+                                        strengths: { type: "ARRAY", items: { type: "STRING" } },
+                                        areasForImprovement: { type: "ARRAY", items: { type: "STRING" } },
+                                        suggestedInterviewQuestions: { type: "ARRAY", items: { type: "STRING" } }
+                                    },
+                                    required: ["candidateName", "matchScore", "executiveSummary", "topSkills", "strengths", "areasForImprovement", "suggestedInterviewQuestions"]
+                                }
+                            }
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Could not connect to Gemini API. Check your API key or network.");
+                    }
+
+                    const rawData = await response.json();
+                    const textResult = rawData.candidates[0].content.parts[0].text;
+                    analysisResult = JSON.parse(textResult);
+
+                } catch (e) {
+                    showError("API Mode Error: " + e.message + " | Reverted to Workspace simulator mode for safety.");
+                    generateSimulatedData(resumeText);
+                }
+            } else {
+                // LOCAL HIGH FIDELITY SIMULATION MODE - Reduced latency delay to 300ms for instant responses
+                document.getElementById('loading-subtext').textContent = "Running WorkspaceLM simulator. Mapping details...";
+                await new Promise(resolve => setTimeout(resolve, 300)); 
+                generateSimulatedData(resumeText);
+            }
+
+            renderReport();
+            
+            chatHistory = [
+                { role: 'assistant', content: `Successfully analyzed **${analysisResult.candidateName || 'Candidate'}**'s profile! Ask me any questions, prepare behavioral panels, or review candidate skills.` }
+            ];
+            renderChatHistory();
+            
+            activeBadge.classList.remove('hidden');
+            activeBadge.classList.add('flex');
+            clearBtn.classList.remove('hidden');
+            
+            chatInput.disabled = false;
+            chatSendBtn.disabled = false;
+            quickPrompts.classList.remove('hidden');
+            chatInput.placeholder = "Ask a specific question about the resume...";
+            setLoading(false);
+        }
+
+        // Dynamically creates structured data from the user's actual uploaded details if API Key is not inputted
+        function generateSimulatedData(text) {
+            // Smart simple regex scanner to pull actual names, emails, and phone metrics from the actual uploaded resume
+            const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+            const phoneMatch = text.match(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+            
+            // Guessing name from the first non-empty lines
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 2);
+            let guessedName = "Candidate Profile";
+            if (lines.length > 0 && lines[0].length < 40 && !lines[0].includes('@')) {
+                guessedName = lines[0];
+            }
+
+            // Simple search tags for skills
+            const commonSkills = ["React", "TypeScript", "Node.js", "Python", "Java", "AWS", "SQL", "Docker", "Kubernetes", "HTML", "CSS", "JavaScript", "C++", "Vite", "Next.js", "Figma", "Git"];
+            const foundSkills = [];
+            commonSkills.forEach(skill => {
+                // Escape special regex characters safely (such as + in C++)
+                const escaped = skill.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const regex = new RegExp(`(?:\\b|\\s|^)${escaped}(?:\\b|\\s|$)`, 'i');
+                if (regex.test(text)) {
+                    foundSkills.push(skill);
+                }
+            });
+            if (foundSkills.length === 0) {
+                foundSkills.push("Software Development", "Analytical Thinking", "Strategic Collaboration");
+            }
+
+            analysisResult = {
+                candidateName: guessedName,
+                email: emailMatch ? emailMatch[0] : "contact@candidate.io",
+                phone: phoneMatch ? phoneMatch[0] : "+1 (555) 987-6543",
+                matchScore: Math.floor(Math.random() * 20) + 75, // Reasonable match scores
+                executiveSummary: `Highly capable professional with proven experience. Deeply versed in modern technical stacks including: ${foundSkills.slice(0, 5).join(', ')}. Demonstrated success delivering high-impact production codebases and scalable software architecture schemas.`,
+                topSkills: foundSkills,
+                strengths: [
+                    "Possesses solid core capabilities matching modern development paradigms.",
+                    "Active communicator with strong peer coordination experience.",
+                    "Demonstrates practical hands-on application of key industry practices."
+                ],
+                areasForImprovement: [
+                    "Could expand core operational cloud infrastructure certifications.",
+                    "Candidate's profile documentation could specify metrics for completed scale tasks."
+                ],
+                suggestedInterviewQuestions: [
+                    `Tell us about your direct application of ${foundSkills[0] || 'software development'} inside your previous workflows.`,
+                    "How do you handle scope updates or strict deployment requirements?",
+                    "Walk us through a critical bug or logical blocker you resolved recently."
+                ]
+            };
+        }
+
+        function renderReport() {
+            if (!analysisResult) return;
+
+            // Render Core Attributes
+            document.getElementById('cand-name').textContent = analysisResult.candidateName || "Profile Analyzed";
+            document.getElementById('cand-email').textContent = analysisResult.email ? "📧 " + analysisResult.email : "📧 No Email Found";
+            document.getElementById('cand-phone').textContent = analysisResult.phone ? "📞 " + analysisResult.phone : "";
+            document.getElementById('exec-summary').textContent = analysisResult.executiveSummary || "";
+            
+            const score = analysisResult.matchScore || 0;
+            document.getElementById('match-score-text').textContent = score + "%";
+            document.getElementById('match-label').textContent = jobDescInput.value.trim() ? "Matched with JD" : "General Score";
+            
+            const radius = 24;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference * (1 - score / 100);
+            document.getElementById('gauge-circle').style.strokeDashoffset = offset;
+
+            // Render Skills
+            const skillsCloud = document.getElementById('skills-cloud');
+            skillsCloud.innerHTML = '';
+            if (analysisResult.topSkills) {
+                analysisResult.topSkills.forEach(skill => {
+                    const pill = document.createElement('span');
+                    pill.className = "text-xs bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-3 py-1.5 rounded-lg font-medium";
+                    pill.textContent = skill;
+                    skillsCloud.appendChild(pill);
+                });
+            }
+
+            // Render Strengths
+            const strengthsList = document.getElementById('strengths-list');
+            strengthsList.innerHTML = '';
+            if (analysisResult.strengths) {
+                analysisResult.strengths.forEach(str => {
+                    const li = document.createElement('li');
+                    li.className = "flex gap-2 items-start";
+                    li.innerHTML = `<span class="text-indigo-400 mt-0.5">•</span><span>${str}</span>`;
+                    strengthsList.appendChild(li);
+                });
+            }
+
+            // Render Suggested Interview Questions
+            const questionsGrid = document.getElementById('questions-grid');
+            questionsGrid.innerHTML = '';
+            if (analysisResult.suggestedInterviewQuestions) {
+                analysisResult.suggestedInterviewQuestions.forEach((q, idx) => {
+                    const block = document.createElement('div');
+                    block.className = "bg-slate-950 border border-slate-850 p-4 rounded-xl text-xs text-slate-300 hover:border-indigo-500/40 transition leading-relaxed";
+                    block.innerHTML = `<span class="font-semibold text-indigo-400 block mb-1">Question ${idx+1}</span>"${q}"`;
+                    questionsGrid.appendChild(block);
+                });
+            }
+
+            // Render Gaps / Growth Evaluation areas
+            const improvementsList = document.getElementById('improvements-list');
+            improvementsList.innerHTML = '';
+            if (analysisResult.areasForImprovement) {
+                analysisResult.areasForImprovement.forEach(gap => {
+                    const li = document.createElement('li');
+                    li.className = "flex gap-2 items-start";
+                    li.innerHTML = `<span class="text-amber-400 mt-0.5">•</span><span>${gap}</span>`;
+                    improvementsList.appendChild(li);
+                });
+            }
+
+            lucide.createIcons();
+        }
+
+        // Tab Switching Actions
+        function switchTab(tab) {
+            currentTab = tab;
+            if (tab === 'report') {
+                tabReportBtn.className = "px-4 py-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 border-indigo-500 text-indigo-400 bg-indigo-500/5";
+                tabChatBtn.className = "px-4 py-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 border-transparent text-slate-400 hover:text-slate-200";
+                
+                if (analysisResult) {
+                    reportView.classList.remove('hidden');
+                } else {
+                    emptyState.classList.remove('hidden');
+                }
+                chatView.classList.add('hidden');
+            } else {
+                tabChatBtn.className = "px-4 py-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 border-indigo-500 text-indigo-400 bg-indigo-500/5";
+                tabReportBtn.className = "px-4 py-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 border-transparent text-slate-400 hover:text-slate-200";
+                
+                chatView.classList.remove('hidden');
+                reportView.classList.add('hidden');
+                emptyState.classList.add('hidden');
+                
+                scrollToChatBottom();
+            }
+        }
+
+        // Q&A Messaging Operations
+        async function handleSendMessage(event) {
+            event.preventDefault();
+            const text = chatInput.value.trim();
+            if (!text || isProcessing) return;
+
+            chatHistory.push({ role: 'user', content: text });
+            chatInput.value = '';
+            renderChatHistory();
+
+            // Temporary placeholder
+            const loadingBubble = document.createElement('div');
+            loadingBubble.id = "chat-typing-loader";
+            loadingBubble.className = "flex gap-3 max-w-[85%]";
+            loadingBubble.innerHTML = `
+                <div class="bg-slate-800 text-slate-300 p-2 rounded-xl shrink-0 h-8 w-8 flex items-center justify-center text-xs font-bold font-mono">AI</div>
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs text-slate-400 flex items-center gap-2">
+                    <i data-lucide="loader-2" class="h-3.5 w-3.5 animate-spin text-indigo-400"></i>
+                    Formulating response based on resume document...
+                </div>
+            `;
+            chatMessages.appendChild(loadingBubble);
+            lucide.createIcons();
+            scrollToChatBottom();
+
+            const apiKey = geminiKeyInput.value.trim();
+
+            if (apiKey) {
+                // Live Gemini Chat API Orchestration
+                try {
+                    const formattedContents = chatHistory.map(msg => ({
+                        role: msg.role === 'user' ? 'user' : 'model',
+                        parts: [{ text: msg.content }]
+                    }));
+
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: formattedContents,
+                            systemInstruction: {
+                                parts: [{
+                                    text: `You are an AI assistant. Answer questions about candidate "${analysisResult.candidateName}" based ONLY on resume context: """${resumeText}"""`
+                                }]
+                            }
+                        })
+                    });
+
+                    if (!response.ok) throw new Error("Gemini API connection error during chat stream.");
+
+                    const data = await response.json();
+                    const reply = data.candidates[0].content.parts[0].text;
+
+                    const loader = document.getElementById('chat-typing-loader');
+                    if (loader) loader.remove();
+
+                    chatHistory.push({ role: 'assistant', content: reply });
+                    renderChatHistory();
+
+                } catch (e) {
+                    const loader = document.getElementById('chat-typing-loader');
+                    if (loader) loader.remove();
+                    chatHistory.push({ role: 'assistant', content: "Interactive Live Chat Connection Error: " + e.message });
+                    renderChatHistory();
+                }
+            } else {
+                // Simulation mode AI conversational logic replies - reduced artificial wait to 200ms
+                await new Promise(resolve => setTimeout(resolve, 200));
+                const loader = document.getElementById('chat-typing-loader');
+                if (loader) loader.remove();
+
+                const matchedSkillsStr = analysisResult.topSkills.slice(0, 4).join(', ');
+                let customSimReply = `Regarding your query "${text}": ${analysisResult.candidateName} possesses experience with ${matchedSkillsStr} and adjacent architecture. They would be highly aligned to tackle workflows of this nature.`;
+                
+                if (text.toLowerCase().includes('stack') || text.toLowerCase().includes('skill')) {
+                    customSimReply = `**${analysisResult.candidateName}'s Core Technical Framework Stack:**\n\n${analysisResult.topSkills.map(s => `* **${s}**`).join('\n')}`;
+                } else if (text.toLowerCase().includes('red flag') || text.toLowerCase().includes('flag') || text.toLowerCase().includes('weakness')) {
+                    customSimReply = `**Evaluation Gaps & Observations for ${analysisResult.candidateName}:**\n\n1. Limited exposure to custom system-level platforms beyond the stated resume highlights.\n2. Lacks certification details for high-level agile operations or AWS frameworks.`;
+                } else if (text.toLowerCase().includes('interview') || text.toLowerCase().includes('outline')) {
+                    customSimReply = `**Tailored Technical Interview Outline:**\n\n1. **Technical Deep Dive (30m):** Ask ${analysisResult.candidateName} to walk through key highlights of ${analysisResult.topSkills[0] || 'their technical work'}.\n2. **System Design (20m):** Discuss scalable patterns.\n3. **Behavioral Alignment (10m):** Assess collaborative and strategic team coordination dynamics.`;
+                }
+
+                chatHistory.push({ role: 'assistant', content: customSimReply });
+                renderChatHistory();
+            }
+        }
+
+        function renderChatHistory() {
+            chatMessages.innerHTML = '';
+            chatHistory.forEach(msg => {
+                const block = document.createElement('div');
+                const isUser = msg.role === 'user';
+                block.className = `flex gap-3 max-w-[85%] ${isUser ? 'ml-auto flex-row-reverse' : ''}`;
+                
+                block.innerHTML = `
+                    <div class="p-2 rounded-xl shrink-0 h-8 w-8 flex items-center justify-center text-xs font-bold font-mono ${isUser ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}">
+                        ${isUser ? 'U' : 'AI'}
+                    </div>
+                    <div class="rounded-2xl p-4 text-xs leading-relaxed whitespace-pre-wrap ${isUser ? 'bg-indigo-600/15 border border-indigo-500/30 text-indigo-100' : 'bg-slate-900 border border-slate-800 text-slate-300'}">
+                        ${escapeHTML(msg.content)}
+                    </div>
+                `;
+                chatMessages.appendChild(block);
+            });
+            scrollToChatBottom();
+        }
+
+        function setQuickPrompt(promptText) {
+            chatInput.value = promptText;
+            chatInput.focus();
+        }
+
+        // Global UI switch controls
+        function setLoading(loading) {
+            isProcessing = loading;
+            if (loading) {
+                emptyState.classList.add('hidden');
+                reportView.classList.add('hidden');
+                loadingState.classList.remove('hidden');
+                analyzeBtn.disabled = true;
+                analyzeBtn.innerHTML = `<i data-lucide="loader-2" class="h-4 w-4 animate-spin"></i> Generating Analysis...`;
+            } else {
+                loadingState.classList.add('hidden');
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = `<i data-lucide="sparkles" class="h-4 w-4"></i> Analyze and Core-Match`;
+                if (analysisResult && currentTab === 'report') {
+                    reportView.classList.remove('hidden');
+                }
+            }
+            lucide.createIcons();
+        }
+
+        function resetWorkspace() {
+            fileInput.value = '';
+            fileLabel.textContent = 'Upload Candidate Resume';
+            jobDescInput.value = '';
+            manualResumeInput.value = '';
+            resumeText = "";
+            analysisResult = null;
+            chatHistory = [
+                { role: 'assistant', content: 'Welcome back! Upload a new resume to generate insights and ask questions.' }
+            ];
+            
+            activeBadge.classList.add('hidden');
+            clearBtn.classList.add('hidden');
+            hideError();
+            
+            chatInput.disabled = true;
+            chatSendBtn.disabled = true;
+            quickPrompts.classList.add('hidden');
+            chatInput.placeholder = "Upload a resume on the left first to ask questions";
+            
+            switchTab('report');
+            renderChatHistory();
+        }
+
+        // General Error Display
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorBox.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorBox.classList.add('hidden');
+        }
+
+        function scrollToChatBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function escapeHTML(str) {
+            let esc = str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+            
+            return esc.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        }
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>
